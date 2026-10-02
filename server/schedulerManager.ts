@@ -12,6 +12,7 @@ import {
 } from '../src/types/job';
 import { searchJobsWithGemini, buildEmailContent } from './geminiJobService';
 import { fetchAllRealJobs } from './realJobFetcher';
+import { SEED_BASELINE_JOBS } from './seedJobsData';
 
 const DATA_DIR = process.env.VERCEL
   ? path.join('/tmp', 'jobradar-data')
@@ -99,9 +100,9 @@ export async function initializeScheduler(): Promise<void> {
 
   initPromise = (async () => {
     try {
-      // Seed baseline verified jobs if empty to prevent cold-start API exhaustion
+      // Seed baseline verified jobs instantly from pre-compiled catalog (zero cold-start delay)
       if (accumulatedDayJobs.length === 0) {
-        accumulatedDayJobs = await fetchAllRealJobs();
+        accumulatedDayJobs = [...SEED_BASELINE_JOBS];
       }
 
       if (hourlyScansHistory.length === 0) {
@@ -331,9 +332,9 @@ export async function runHourlyJobInvestigation(): Promise<{
 export async function compileDaily8pmReport(triggerType: 'automatic_8pm' | 'manual' = 'manual'): Promise<DailyReport> {
   const lima = getLimaTime();
 
-  // If accumulatedDayJobs is empty, run a fresh hourly investigation first
+  // If accumulatedDayJobs is empty, use seed baseline
   if (accumulatedDayJobs.length === 0) {
-    await runHourlyJobInvestigation();
+    accumulatedDayJobs = [...SEED_BASELINE_JOBS];
   }
 
   const jobsToReport = accumulatedDayJobs.length > 0 ? accumulatedDayJobs : (await searchJobsWithGemini()).jobs;

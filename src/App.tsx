@@ -60,8 +60,11 @@ export default function App() {
   };
 
   const safeFetchJson = async <T,>(url: string, options?: RequestInit): Promise<T | null> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
     try {
-      const res = await fetch(url, options);
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
       const contentType = res.headers.get('content-type');
       if (res.ok && contentType && contentType.includes('application/json')) {
         return (await res.json()) as T;
@@ -69,6 +72,8 @@ export default function App() {
       return null;
     } catch {
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   };
 
@@ -111,18 +116,31 @@ export default function App() {
   };
 
   useEffect(() => {
+    let active = true;
     const init = async () => {
       setLoadingInitial(true);
-      await Promise.all([fetchStatus(), fetchLatestReport(), fetchHourlyScans(), fetchReportsHistory()]);
-      setLoadingInitial(false);
+      // Failsafe timer: loading screen will NEVER block for more than 3 seconds
+      const failsafe = setTimeout(() => {
+        if (active) setLoadingInitial(false);
+      }, 3000);
+
+      try {
+        await Promise.allSettled([fetchStatus(), fetchLatestReport(), fetchHourlyScans(), fetchReportsHistory()]);
+      } finally {
+        clearTimeout(failsafe);
+        if (active) setLoadingInitial(false);
+      }
     };
     init();
 
     const interval = setInterval(() => {
       fetchStatus();
       fetchHourlyScans();
-    }, 12000);
-    return () => clearInterval(interval);
+    }, 15000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const handleUpdateConfig = async (newConfig: Partial<SchedulerConfig>) => {
@@ -146,20 +164,26 @@ export default function App() {
   };
 
   const postJsonSafely = async (endpoint: string) => {
-    let res = await fetch(endpoint, { method: 'POST' });
-    if (!res.ok && endpoint.startsWith('/api/')) {
-      const fallbackUrl = endpoint.replace('/api/', '/');
-      try {
-        const res2 = await fetch(fallbackUrl, { method: 'POST' });
-        if (res2.ok) return res2;
-      } catch {}
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+    try {
+      let res = await fetch(endpoint, { method: 'POST', signal: controller.signal });
+      if (!res.ok && endpoint.startsWith('/api/')) {
+        const fallbackUrl = endpoint.replace('/api/', '/');
+        try {
+          const res2 = await fetch(fallbackUrl, { method: 'POST', signal: controller.signal });
+          if (res2.ok) return res2;
+        } catch {}
+      }
+      return res;
+    } finally {
+      clearTimeout(timer);
     }
-    return res;
   };
 
   const handleTriggerHourlyScan = async () => {
     setIsScanning(true);
-    showNotification('Consultando vacantes reales en vivo en los portales oficiales...', 'info');
+    showNotification('Iniciando ronda de investigación en vivo...', 'info');
     try {
       const res = await postJsonSafely('/api/jobs/hourly-scan');
       const contentType = res.headers.get('content-type');
@@ -168,14 +192,18 @@ export default function App() {
       }
       const data = await res.json();
       if (data.success) {
-        if (data.report) setCurrentReport(data.report);
-        await Promise.all([fetchStatus(), fetchHourlyScans()]);
-        showNotification(`¡Ronda horaria completada! Se verificaron ${data.jobsFoundCount} convocatorias reales.`);
+        if (data.report) {
+          setCurrentReport(data.report);
+        } else {
+          await fetchLatestReport();
+        }
+        await Promise.allSettled([fetchStatus(), fetchHourlyScans()]);
+        showNotification(`¡Ronda completada! Se verificaron ${data.jobsFoundCount || currentReport?.jobs?.length || 0} convocatorias.`);
       } else {
         showNotification(data.error || 'Error al ejecutar ronda horaria.', 'error');
       }
     } catch (e: any) {
-      showNotification(e.message || 'Error de conexión.', 'error');
+      showNotification(e.message || 'Error de conexión durante el escaneo.', 'error');
     } finally {
       setIsScanning(false);
     }
