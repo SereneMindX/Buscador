@@ -4,7 +4,11 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/**/*.ts": {
+    "api/*.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/*.ts": {
       "maxDuration": 60,
       "memory": 1024
     }
@@ -12,7 +16,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index"
+      "destination": "/api/index.js"
     },
     {
       "source": "/(.*)",
