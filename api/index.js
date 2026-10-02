@@ -23367,7 +23367,7 @@ Enlace directo oficial: ${j.sourceUrl}
   };
 }
 
-// server/seedJobsData.ts
+// src/data/seedJobs.ts
 var SEED_BASELINE_JOBS = [
   {
     "id": "ct-139178959602CA7261373E686DCF3405",
