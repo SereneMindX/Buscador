@@ -1,0 +1,6 @@
+{
+  "name": "JobRadar Perú Remoto",
+  "description": "Buscador y notificador diario de empleos remotos en Perú para roles clave con alertas por correo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
